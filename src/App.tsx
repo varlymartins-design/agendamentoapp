@@ -32,13 +32,15 @@ export default function App() {
 
   // Boot
   useEffect(() => {
+    // Safety timeout — show login after 4s even if Firebase is slow/blocked
+    const safetyTimer = setTimeout(() => {
+      setDbSynced(true);
+    }, 4000);
+
     (async () => {
       await prewarmCache();
-      try { await syncFromServer(); } catch {}
-      initRealtimeSync();
-      setDbSynced(true);
 
-      // Resolve salon from URL
+      // Resolve salon from URL immediately (no need to wait for Firebase)
       const params = new URLSearchParams(window.location.search);
       const salonId = params.get('salonId') || params.get('token');
       if (salonId) {
@@ -46,7 +48,7 @@ export default function App() {
         setPersona('client');
       }
 
-      // Restore salon session
+      // Restore salon session immediately from localStorage
       const session = localStorage.getItem('ca_session');
       if (session) {
         try {
@@ -54,7 +56,21 @@ export default function App() {
           if (s.role === 'salon' && s.salonId) setCurrentSalonId(s.salonId);
         } catch {}
       }
+
+      // Try Firebase sync (non-blocking)
+      try {
+        await Promise.race([
+          syncFromServer(),
+          new Promise(resolve => setTimeout(resolve, 3000))
+        ]);
+      } catch {}
+
+      try { initRealtimeSync(); } catch {}
+      clearTimeout(safetyTimer);
+      setDbSynced(true);
     })();
+
+    return () => clearTimeout(safetyTimer);
   }, []);
 
   // Listen for db changes
