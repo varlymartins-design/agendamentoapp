@@ -1,0 +1,6 @@
+{
+  "name": "Bora Vender",
+  "description": "Plataforma SaaS multi-vendedor com feed estilo TikTok e fechamento de pedidos direto no WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
