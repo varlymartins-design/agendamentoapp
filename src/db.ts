@@ -9,12 +9,12 @@ import { INITIAL_PLANS, INITIAL_SALONS, INITIAL_SERVICES, INITIAL_PROFESSIONALS,
 // ─── Firebase Config ────────────────────────────────────────────────────────
 const metaEnv = (import.meta as any).env || {};
 const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || "AIzaSyD_salon_central_placeholder",
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "central-agendamento-salon.firebaseapp.com",
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "central-agendamento-salon",
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "central-agendamento-salon.appspot.com",
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "000000000000",
-  appId: metaEnv.VITE_FIREBASE_APP_ID || "1:000000000000:web:salon000000000000",
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || "AIzaSyBT_rVosTfdzj9Q_VzOaQSoSwPsOli_uco",
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "agendamentoapp-6fcc3.firebaseapp.com",
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "agendamentoapp-6fcc3",
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "agendamentoapp-6fcc3.firebasestorage.app",
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "223682234042",
+  appId: metaEnv.VITE_FIREBASE_APP_ID || "1:223682234042:web:0747187bbc45863adf6483",
 };
 const app = initializeApp(firebaseConfig);
 const firestoreDbId = metaEnv.VITE_FIREBASE_DATABASE_ID || "(default)";
