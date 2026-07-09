@@ -23,7 +23,7 @@ function getInitialPersona(): Persona {
 
 export default function App() {
   const [persona, setPersona] = useState<Persona>(() => getInitialPersona());
-  const [dbSynced, setDbSynced] = useState(false);
+  const [dbSynced, setDbSynced] = useState(true); // Start as true — show login immediately
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [currentSalonId, setCurrentSalonId] = useState<string | null>(null);
   const [clientSalonId, setClientSalonId] = useState<string | null>(null);
