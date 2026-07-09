@@ -93,16 +93,17 @@ export default function App() {
     window.history.replaceState({}, '', window.location.pathname);
   }
 
-  if (!dbSynced || persona === 'loading') {
+  if (persona === 'loading') {
     return (
-      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-2xl shadow-lg">✂️</div>
-        <p className="text-neutral-400 text-sm animate-pulse">Carregando Central de Agendamento...</p>
-        {!dbSynced && (
-          <div className="mt-6 w-72 space-y-3">
-            <LoginForm onLogin={handleLogin} />
-          </div>
-        )}
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-6 p-4">
+        <div className="text-center mb-2">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-4xl shadow-xl mx-auto mb-4">✂️</div>
+          <h1 className="text-2xl font-black text-white">Central de Agendamento</h1>
+          <p className="text-neutral-400 text-sm mt-1">Sistema para salões de beleza</p>
+        </div>
+        <div className="w-full max-w-sm">
+          <LoginForm onLogin={handleLogin} />
+        </div>
       </div>
     );
   }
