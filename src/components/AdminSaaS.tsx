@@ -17,6 +17,7 @@ export default function AdminSaaS({ onLogout, refreshCounter, onRefresh }: {
   const [form, setForm] = useState({ name: '', store_name: '', email: '', password: '', whatsapp_number: '', plan_id: 'plan-pro' });
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState('');
+  const [saving, setSaving] = useState(false); // 🔒 trava para evitar cadastro duplicado
 
   useEffect(() => {
     setSalons(db.getSalons());
@@ -32,38 +33,54 @@ export default function AdminSaaS({ onLogout, refreshCounter, onRefresh }: {
   }
 
   function saveSalon() {
+    if (saving) return; // 🔒 se já está salvando, ignora cliques extras
+
     if (!form.name || !form.store_name || !form.email || !form.password) {
       setFormError('Preencha todos os campos obrigatórios.'); return;
     }
-    const all = db.getSalons();
-    if (editSalon) {
-      const updated = all.map(s => s.id === editSalon.id ? { ...s, ...form } : s);
-      db.saveSalons(updated);
-      setSuccess('Salão atualizado!');
-    } else {
-      const newSalon: Salon = {
-        id: `salon-${Date.now()}`,
-        ...form,
-        subscription_status: 'active',
-        created_at: new Date().toISOString(),
-        categories: ['Cabelo', 'Unhas', 'Estética'],
-        working_hours: {
-          seg: { open: '09:00', close: '18:00', enabled: true },
-          ter: { open: '09:00', close: '18:00', enabled: true },
-          qua: { open: '09:00', close: '18:00', enabled: true },
-          qui: { open: '09:00', close: '18:00', enabled: true },
-          sex: { open: '09:00', close: '18:00', enabled: true },
-          sab: { open: '09:00', close: '13:00', enabled: true },
-          dom: { open: '09:00', close: '13:00', enabled: false },
+
+    setSaving(true); // 🔒 ativa a trava
+    setFormError('');
+
+    try {
+      const all = db.getSalons();
+      if (editSalon) {
+        const updated = all.map(s => s.id === editSalon.id ? { ...s, ...form } : s);
+        db.saveSalons(updated);
+        setSuccess('Salão atualizado!');
+      } else {
+        // 🔒 evita duplicar salão com o mesmo e-mail
+        if (all.some(s => s.email.toLowerCase() === form.email.toLowerCase())) {
+          setFormError('Já existe um salão com esse e-mail.');
+          setSaving(false);
+          return;
         }
-      };
-      db.saveSalons([...all, newSalon]);
-      setSuccess(`Salão criado! Link: ${window.location.origin}?salonId=${newSalon.id}`);
+        const newSalon: Salon = {
+          id: `salon-${Date.now()}`,
+          ...form,
+          subscription_status: 'active',
+          created_at: new Date().toISOString(),
+          categories: ['Cabelo', 'Unhas', 'Estética'],
+          working_hours: {
+            seg: { open: '09:00', close: '18:00', enabled: true },
+            ter: { open: '09:00', close: '18:00', enabled: true },
+            qua: { open: '09:00', close: '18:00', enabled: true },
+            qui: { open: '09:00', close: '18:00', enabled: true },
+            sex: { open: '09:00', close: '18:00', enabled: true },
+            sab: { open: '09:00', close: '13:00', enabled: true },
+            dom: { open: '09:00', close: '13:00', enabled: false },
+          }
+        };
+        db.saveSalons([...all, newSalon]);
+        setSuccess(`Salão criado! Link: ${window.location.origin}?salonId=${newSalon.id}`);
+      }
+      setShowAddSalon(false); setEditSalon(null);
+      setForm({ name: '', store_name: '', email: '', password: '', whatsapp_number: '', plan_id: 'plan-pro' });
+      onRefresh();
+      setTimeout(() => setSuccess(''), 5000);
+    } finally {
+      setSaving(false); // 🔓 libera a trava ao final
     }
-    setShowAddSalon(false); setEditSalon(null);
-    setForm({ name: '', store_name: '', email: '', password: '', whatsapp_number: '', plan_id: 'plan-pro' });
-    onRefresh();
-    setTimeout(() => setSuccess(''), 5000);
   }
 
   function toggleStatus(salon: Salon) {
@@ -226,39 +243,4 @@ export default function AdminSaaS({ onLogout, refreshCounter, onRefresh }: {
           <div className="bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-neutral-800 sticky top-0 bg-neutral-900 z-10">
               <h2 className="font-black text-white">{editSalon ? 'Editar Salão' : 'Novo Salão'}</h2>
-              <button onClick={() => { setShowAddSalon(false); setEditSalon(null); }} className="p-1.5 hover:bg-neutral-800 rounded-lg transition"><X className="w-4 h-4 text-neutral-400" /></button>
-            </div>
-            <div className="p-4 space-y-3">
-              {[
-                { label: 'Nome do Responsável *', key: 'name', placeholder: 'Ex: Ana Lima' },
-                { label: 'Nome do Salão *', key: 'store_name', placeholder: 'Ex: Salão da Ana' },
-                { label: 'E-mail *', key: 'email', placeholder: 'ana@salao.com', type: 'email' },
-                { label: 'Senha *', key: 'password', placeholder: '••••••', type: 'password' },
-                { label: 'WhatsApp', key: 'whatsapp_number', placeholder: '5511999999999' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">{f.label}</label>
-                  <input type={f.type || 'text'} value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-pink-500 transition" />
-                </div>
-              ))}
-              <div>
-                <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Plano</label>
-                <select value={form.plan_id} onChange={e => setForm(p => ({ ...p, plan_id: e.target.value }))}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-pink-500 transition">
-                  {plans.map(p => <option key={p.id} value={p.id}>{p.name} — R$ {p.price.toFixed(2)}/{p.interval}</option>)}
-                </select>
-              </div>
-              {formError && <p className="text-red-400 text-xs">{formError}</p>}
-              <button onClick={saveSalon}
-                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black py-3 rounded-xl text-sm active:scale-95 transition mt-2">
-                {editSalon ? 'Salvar Alterações' : 'Criar Salão + Gerar Link'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+              <button onClick={() => { setShowAddSalon(false); setEditSalon(null); }} className="p-1.5 hover:bg-neutral-800 rounded-lg transition"><X className="w-4 h-4 text-neutral-400" /></
