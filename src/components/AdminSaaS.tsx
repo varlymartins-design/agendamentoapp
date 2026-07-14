@@ -248,3 +248,39 @@ export default function AdminSaaS({ onLogout, refreshCounter, onRefresh }: {
             <div className="flex items-center justify-between p-4 border-b border-neutral-800 sticky top-0 bg-neutral-900 z-10">
               <h2 className="font-black text-white">{editSalon ? 'Editar Salão' : 'Novo Salão'}</h2>
               <button onClick={() => { setShowAddSalon(false); setEditSalon(null); }} className="p-1.5 hover:bg-neutral-800 rounded-lg transition"><X className="w-4 h-4 text-neutral-400" /></
+button>
+            </div>
+            <div className="p-4 space-y-3">
+              {[
+                { label: 'Nome do Responsável *', key: 'name', placeholder: 'Ex: Ana Lima' },
+                { label: 'Nome do Salão *', key: 'store_name', placeholder: 'Ex: Salão da Ana' },
+                { label: 'E-mail *', key: 'email', placeholder: 'ana@salao.com', type: 'email' },
+                { label: 'Senha *', key: 'password', placeholder: '••••••', type: 'password' },
+                { label: 'WhatsApp', key: 'whatsapp_number', placeholder: '5511999999999' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">{f.label}</label>
+                  <input type={f.type || 'text'} value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-pink-500 transition" />
+                </div>
+              ))}
+              <div>
+                <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Plano</label>
+                <select value={form.plan_id} onChange={e => setForm(p => ({ ...p, plan_id: e.target.value }))}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-pink-500 transition">
+                  {plans.map(p => <option key={p.id} value={p.id}>{p.name} — R$ {p.price.toFixed(2)}/{p.interval}</option>)}
+                </select>
+              </div>
+              {formError && <p className="text-red-400 text-xs">{formError}</p>}
+              <button onClick={saveSalon}
+                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black py-3 rounded-xl text-sm active:scale-95 transition mt-2">
+                {editSalon ? 'Salvar Alterações' : 'Criar Salão + Gerar Link'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
