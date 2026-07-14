@@ -20,7 +20,11 @@ export default function AdminSaaS({ onLogout, refreshCounter, onRefresh }: {
   const [saving, setSaving] = useState(false); // 🔒 trava para evitar cadastro duplicado
 
   useEffect(() => {
-    setSalons(db.getSalons());
+    // Dedup salons by id before displaying
+    const raw = db.getSalons();
+    const seen = new Set<string>();
+    const deduped = raw.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+    setSalons(deduped);
     setPlans(db.getPlans());
   }, [refreshCounter]);
 

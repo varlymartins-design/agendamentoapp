@@ -96,7 +96,15 @@ async function saveToFirestoreCollection(collectionName: string, items: any[]): 
 function mergeSalonsWithLocal(serverSalons: Salon[]): Salon[] {
   const localSalons: Salon[] = JSON.parse(safeGetItem('ca_salons') || '[]');
   const serverIds = new Set(serverSalons.map(s => s.id));
-  const localOnly = localSalons.filter(s => !serverIds.has(s.id));
+
+  // FIX: Only include local-only salons that:
+  // 1. Are NOT on the server yet (genuinely new, pending sync)
+  // 2. Have pendingSync flag active — meaning they were just created
+  // This prevents phantom/duplicate salons from appearing
+  const localOnly = isPendingSync('salons')
+    ? localSalons.filter(s => !serverIds.has(s.id))
+    : [];
+
   const merged = serverSalons.map(ss => {
     const ls = localSalons.find(l => l.id === ss.id);
     if (!ls) return ss;
@@ -114,7 +122,11 @@ function mergeSalonsWithLocal(serverSalons: Salon[]): Salon[] {
         ).filter(Boolean);
     return { ...ss, store_logo, store_banners };
   });
-  return [...localOnly, ...merged];
+
+  // Final dedup by id — just in case
+  const all = [...localOnly, ...merged];
+  const seen = new Set<string>();
+  return all.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
 }
 
 function isClientSession(): boolean {
@@ -155,7 +167,7 @@ export async function prewarmCache(): Promise<void> {
     if (!v) {
       // Seed with initial data
       if (key === 'ca_plans') safeSetItem(key, JSON.stringify(INITIAL_PLANS));
-      if (key === 'ca_salons') safeSetItem(key, JSON.stringify(INITIAL_SALONS));
+      if (key === 'ca_salons') safeSetItem(key, JSON.stringify([])); // start empty, Firestore fills in
       if (key === 'ca_services') safeSetItem(key, JSON.stringify(INITIAL_SERVICES));
       if (key === 'ca_professionals') safeSetItem(key, JSON.stringify(INITIAL_PROFESSIONALS));
       if (key === 'ca_appointments') safeSetItem(key, JSON.stringify(INITIAL_APPOINTMENTS));
@@ -193,9 +205,14 @@ export const db = {
   // Salons
   getSalons(): Salon[] { return JSON.parse(safeGetItem('ca_salons') || '[]'); },
   saveSalons(salons: Salon[]): void {
-    safeSetItem('ca_salons', JSON.stringify(salons));
+    // Dedup before saving — prevents duplicates from stacking up
+    const seen = new Set<string>();
+    const deduped = salons.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+    safeSetItem('ca_salons', JSON.stringify(deduped));
     setPendingSync('salons', true);
-    saveToFirestoreCollection('salons', salons).catch(() => {});
+    saveToFirestoreCollection('salons', deduped)
+      .then(() => setPendingSync('salons', false))
+      .catch(() => {});
   },
 
   // Services
