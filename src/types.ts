@@ -19,6 +19,7 @@ export interface Salon {
   categories?: string[];  // categorias de serviço (cabelo, unhas, estética...)
   first_payment_date?: string;
   next_payment_date?: string;
+  payment_status?: 'active' | 'overdue';
   working_hours?: WorkingHours;
   address?: string;
 }

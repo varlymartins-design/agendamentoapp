@@ -5,20 +5,12 @@ import {
 } from 'firebase/firestore';
 import { Salon, Service, Professional, Appointment, Plan, AccessLink, ClientRegistration } from './types';
 import { INITIAL_PLANS, INITIAL_SALONS, INITIAL_SERVICES, INITIAL_PROFESSIONALS, INITIAL_APPOINTMENTS, INITIAL_LINKS, INITIAL_CLIENTS } from './data';
+import firebaseConfig from '../firebase-applet-config.json';
 
 // ─── Firebase Config ────────────────────────────────────────────────────────
-const metaEnv = (import.meta as any).env || {};
-const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || "AIzaSyBT_rVosTfdzj9Q_VzOaQSoSwPsOli_uco",
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "agendamentoapp-6fcc3.firebaseapp.com",
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "agendamentoapp-6fcc3",
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "agendamentoapp-6fcc3.firebasestorage.app",
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "223682234042",
-  appId: metaEnv.VITE_FIREBASE_APP_ID || "1:223682234042:web:0747187bbc45863adf6483",
-};
 const app = initializeApp(firebaseConfig);
-const firestoreDbId = metaEnv.VITE_FIREBASE_DATABASE_ID || "(default)";
-const firestore = getFirestore(app, firestoreDbId);
+const firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
 
 // ─── In-Memory Cache ─────────────────────────────────────────────────────────
 const memCache: Record<string, string> = {};
@@ -97,10 +89,8 @@ function mergeSalonsWithLocal(serverSalons: Salon[]): Salon[] {
   const localSalons: Salon[] = JSON.parse(safeGetItem('ca_salons') || '[]');
   const serverIds = new Set(serverSalons.map(s => s.id));
 
-  // FIX: Only include local-only salons that:
-  // 1. Are NOT on the server yet (genuinely new, pending sync)
-  // 2. Have pendingSync flag active — meaning they were just created
-  // This prevents phantom/duplicate salons from appearing
+  // FIX: Só inclui salões locais se pendingSync estiver ativo (recém criados)
+  // Evita que salões antigos do localStorage apareçam como duplicatas
   const localOnly = isPendingSync('salons')
     ? localSalons.filter(s => !serverIds.has(s.id))
     : [];
@@ -108,7 +98,6 @@ function mergeSalonsWithLocal(serverSalons: Salon[]): Salon[] {
   const merged = serverSalons.map(ss => {
     const ls = localSalons.find(l => l.id === ss.id);
     if (!ls) return ss;
-    // Resolve base64 logo/banners from local
     let store_logo = ss.store_logo;
     if (ls.store_logo?.startsWith('data:')) store_logo = ls.store_logo;
     else if (store_logo === '__local_base64__') store_logo = ls.store_logo || '';
@@ -123,7 +112,7 @@ function mergeSalonsWithLocal(serverSalons: Salon[]): Salon[] {
     return { ...ss, store_logo, store_banners };
   });
 
-  // Final dedup by id — just in case
+  // Dedup final por id — garante que nunca haja duplicatas
   const all = [...localOnly, ...merged];
   const seen = new Set<string>();
   return all.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
@@ -167,7 +156,7 @@ export async function prewarmCache(): Promise<void> {
     if (!v) {
       // Seed with initial data
       if (key === 'ca_plans') safeSetItem(key, JSON.stringify(INITIAL_PLANS));
-      if (key === 'ca_salons') safeSetItem(key, JSON.stringify([])); // start empty, Firestore fills in
+      if (key === 'ca_salons') safeSetItem(key, JSON.stringify([])); // vazio — Firebase preenche
       if (key === 'ca_services') safeSetItem(key, JSON.stringify(INITIAL_SERVICES));
       if (key === 'ca_professionals') safeSetItem(key, JSON.stringify(INITIAL_PROFESSIONALS));
       if (key === 'ca_appointments') safeSetItem(key, JSON.stringify(INITIAL_APPOINTMENTS));
@@ -200,14 +189,24 @@ export function initRealtimeSync(): void {
   }
 }
 
+// ─── Delete removed items helper ──────────────────────────────────────────────
+function deleteRemovedItems(collectionName: string, oldItems: any[], newItems: any[]): void {
+  const newIds = new Set(newItems.map(item => item.id));
+  const deleted = oldItems.filter(item => item.id && !newIds.has(item.id));
+  deleted.forEach(item => {
+    deleteDoc(doc(firestore, collectionName, item.id)).catch(() => {});
+  });
+}
+
 // ─── DB object ───────────────────────────────────────────────────────────────
 export const db = {
   // Salons
   getSalons(): Salon[] { return JSON.parse(safeGetItem('ca_salons') || '[]'); },
   saveSalons(salons: Salon[]): void {
-    // Dedup before saving — prevents duplicates from stacking up
+    // FIX: Dedup por id antes de salvar — previne salões fantasmas
     const seen = new Set<string>();
     const deduped = salons.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+    deleteRemovedItems('salons', this.getSalons(), deduped);
     safeSetItem('ca_salons', JSON.stringify(deduped));
     setPendingSync('salons', true);
     saveToFirestoreCollection('salons', deduped)
@@ -218,6 +217,7 @@ export const db = {
   // Services
   getServices(): Service[] { return JSON.parse(safeGetItem('ca_services') || '[]'); },
   saveServices(services: Service[]): void {
+    deleteRemovedItems('services', this.getServices(), services);
     safeSetItem('ca_services', JSON.stringify(services));
     setPendingSync('services', true);
     saveToFirestoreCollection('services', services).catch(() => {});
@@ -226,6 +226,7 @@ export const db = {
   // Professionals
   getProfessionals(): Professional[] { return JSON.parse(safeGetItem('ca_professionals') || '[]'); },
   saveProfessionals(professionals: Professional[]): void {
+    deleteRemovedItems('professionals', this.getProfessionals(), professionals);
     safeSetItem('ca_professionals', JSON.stringify(professionals));
     saveToFirestoreCollection('professionals', professionals).catch(() => {});
   },
@@ -233,6 +234,7 @@ export const db = {
   // Appointments
   getAppointments(): Appointment[] { return JSON.parse(safeGetItem('ca_appointments') || '[]'); },
   saveAppointments(appointments: Appointment[]): void {
+    deleteRemovedItems('appointments', this.getAppointments(), appointments);
     safeSetItem('ca_appointments', JSON.stringify(appointments));
     saveToFirestoreCollection('appointments', appointments).catch(() => {});
   },
@@ -243,6 +245,7 @@ export const db = {
     return stored ? JSON.parse(stored) : INITIAL_PLANS;
   },
   savePlans(plans: Plan[]): void {
+    deleteRemovedItems('plans', this.getPlans(), plans);
     safeSetItem('ca_plans', JSON.stringify(plans));
     saveToFirestoreCollection('plans', plans).catch(() => {});
   },
@@ -250,6 +253,7 @@ export const db = {
   // Links
   getLinks(): AccessLink[] { return JSON.parse(safeGetItem('ca_links') || '[]'); },
   saveLinks(links: AccessLink[]): void {
+    deleteRemovedItems('links', this.getLinks(), links);
     safeSetItem('ca_links', JSON.stringify(links));
     saveToFirestoreCollection('links', links).catch(() => {});
   },
@@ -257,6 +261,7 @@ export const db = {
   // Clients
   getClients(): ClientRegistration[] { return JSON.parse(safeGetItem('ca_clients') || '[]'); },
   saveClients(clients: ClientRegistration[]): void {
+    deleteRemovedItems('clients', this.getClients(), clients);
     safeSetItem('ca_clients', JSON.stringify(clients));
     saveToFirestoreCollection('clients', clients).catch(() => {});
   },

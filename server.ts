@@ -1,11 +1,17 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  const isProd = process.env.NODE_ENV === "production";
+
+  console.log(`Starting server in ${isProd ? 'production' : 'development'} mode`);
 
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
@@ -127,17 +133,39 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+  if (!isProd) {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log('Vite middleware loaded');
+    } catch (err) {
+      console.error('Failed to load Vite middleware:', err);
+    }
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // In production, we serve from the 'dist' directory.
+    // When bundled to dist/server.cjs, __dirname is 'dist'
+    // When running from root (tsx server.ts), __dirname is '.'
+    const distPath = path.resolve(__dirname, fs.existsSync(path.join(__dirname, 'index.html')) ? '.' : 'dist');
+    
+    console.log(`Serving static files from: ${distPath}`);
+    
+    app.use(express.static(distPath, {
+      maxAge: '1d',
+      index: false
+    }));
+
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        console.error(`Index file not found at: ${indexPath}`);
+        res.status(404).send('Application build not found. Please contact support.');
+      }
     });
   }
 

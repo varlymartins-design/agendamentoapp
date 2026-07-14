@@ -1,4 +1,4 @@
-import { Salon, Service, Professional, Appointment, Plan, AccessLink } from './types';
+import { Salon, Service, Professional, Appointment, Plan, AccessLink, ClientRegistration } from './types';
 
 export const INITIAL_PLANS: Plan[] = [
   {
@@ -13,7 +13,7 @@ export const INITIAL_PLANS: Plan[] = [
     name: 'Profissional',
     price: 89.90,
     interval: 'mensal',
-    features: ['Serviços ilimitados', 'Até 5 profissionais', 'Link personalizado', 'Agenda + WhatsApp', 'Relatórios']
+    features: ['Serviços ilimitados', 'Até 5 profissionais', 'Link personalizado', 'Agenda + WhatsApp']
   },
   {
     id: 'plan-premium',
@@ -24,8 +24,7 @@ export const INITIAL_PLANS: Plan[] = [
   }
 ];
 
-export const INITIAL_SALONS: Salon[] = [];
-// Salões são criados pelo admin — não há dados demo iniciais
+export const INITIAL_SALONS: Salon[] = []; // Salões criados pelo admin
 
 export const INITIAL_SERVICES: Service[] = [];
 

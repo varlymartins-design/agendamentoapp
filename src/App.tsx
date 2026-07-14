@@ -5,16 +5,22 @@ import AdminSaaS from './components/AdminSaaS';
 import SalonDashboard from './components/SalonDashboard';
 import BookingPage from './components/BookingPage';
 
-type Persona = 'loading' | 'admin' | 'salon' | 'client';
+type Persona = 'loading' | 'admin' | 'salon' | 'client' | 'client_admin';
 
 function getInitialPersona(): Persona {
   const params = new URLSearchParams(window.location.search);
-  if (params.has('salonId') || params.has('token')) return 'client';
+  const isPanel = params.get('panel') === 'true';
+  const salonId = params.get('salonId') || params.get('token');
+  if (salonId) {
+    if (isPanel) return 'salon';
+    return 'client';
+  }
   const session = localStorage.getItem('ca_session');
   if (session) {
     try {
       const s = JSON.parse(session);
       if (s.role === 'admin') return 'admin';
+      if (s.role === 'client_admin') return 'client_admin';
       if (s.role === 'salon') return 'salon';
     } catch {}
   }
@@ -22,11 +28,37 @@ function getInitialPersona(): Persona {
 }
 
 export default function App() {
+  const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const [persona, setPersona] = useState<Persona>(() => getInitialPersona());
-  const [dbSynced, setDbSynced] = useState(true); // Start as true — show login immediately
+  const [dbSynced, setDbSynced] = useState(true);
   const [refreshCounter, setRefreshCounter] = useState(0);
-  const [currentSalonId, setCurrentSalonId] = useState<string | null>(null);
-  const [clientSalonId, setClientSalonId] = useState<string | null>(null);
+  const [currentSalonId, setCurrentSalonId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const p = new URLSearchParams(window.location.search);
+    const sId = p.get('salonId') || p.get('token');
+    const isPanel = p.get('panel') === 'true';
+    if (sId && isPanel) return sId;
+    
+    try {
+      const session = localStorage.getItem('ca_session');
+      if (session) {
+        const s = JSON.parse(session);
+        if (s.role === 'salon' && s.salonId) return s.salonId;
+      }
+    } catch (e) {
+      console.warn('Failed to read session from localStorage', e);
+    }
+    return null;
+  });
+
+  const [clientSalonId, setClientSalonId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const p = new URLSearchParams(window.location.search);
+    const sId = p.get('salonId') || p.get('token');
+    const isPanel = p.get('panel') === 'true';
+    if (sId && !isPanel) return sId;
+    return null;
+  });
 
   const triggerRefresh = useCallback(() => setRefreshCounter(c => c + 1), []);
 
@@ -42,10 +74,16 @@ export default function App() {
 
       // Resolve salon from URL immediately (no need to wait for Firebase)
       const params = new URLSearchParams(window.location.search);
+      const isPanel = params.get('panel') === 'true';
       const salonId = params.get('salonId') || params.get('token');
       if (salonId) {
-        setClientSalonId(salonId);
-        setPersona('client');
+        if (isPanel) {
+          setCurrentSalonId(salonId);
+          setPersona('salon');
+        } else {
+          setClientSalonId(salonId);
+          setPersona('client');
+        }
       }
 
       // Restore salon session immediately from localStorage
@@ -80,7 +118,7 @@ export default function App() {
     return () => window.removeEventListener('db_changed', handler);
   }, [triggerRefresh]);
 
-  function handleLogin(role: 'admin' | 'salon', salonId?: string) {
+  function handleLogin(role: 'admin' | 'salon' | 'client_admin', salonId?: string) {
     localStorage.setItem('ca_session', JSON.stringify({ role, salonId }));
     if (role === 'salon' && salonId) setCurrentSalonId(salonId);
     setPersona(role);
@@ -97,9 +135,9 @@ export default function App() {
     return (
       <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-6 p-4">
         <div className="text-center mb-2">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-4xl shadow-xl mx-auto mb-4">✂️</div>
-          <h1 className="text-2xl font-black text-white">Central de Agendamento</h1>
-          <p className="text-neutral-400 text-sm mt-1">Sistema para salões de beleza</p>
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-4xl shadow-xl mx-auto mb-4">📅</div>
+          <h1 className="text-2xl font-black text-white">Agenda Onzap Flow</h1>
+          <p className="text-neutral-400 text-sm mt-1">Sistema para empreendedores</p>
         </div>
         <div className="w-full max-w-sm">
           <LoginForm onLogin={handleLogin} />
@@ -129,6 +167,18 @@ export default function App() {
         onLogout={handleLogout}
         refreshCounter={refreshCounter}
         onRefresh={triggerRefresh}
+        isClientPanel={false}
+      />
+    );
+  }
+
+  if (persona === 'client_admin') {
+    return (
+      <AdminSaaS
+        onLogout={handleLogout}
+        refreshCounter={refreshCounter}
+        onRefresh={triggerRefresh}
+        isClientPanel={true}
       />
     );
   }
@@ -136,9 +186,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-6 p-4">
       <div className="text-center mb-2">
-        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-4xl shadow-xl mx-auto mb-4">✂️</div>
-        <h1 className="text-2xl font-black text-white">Central de Agendamento</h1>
-        <p className="text-neutral-400 text-sm mt-1">Sistema para salões de beleza</p>
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-4xl shadow-xl mx-auto mb-4">📅</div>
+        <h1 className="text-2xl font-black text-white">Agenda Onzap Flow</h1>
+        <p className="text-neutral-400 text-sm mt-1">Sistema para empreendedores</p>
       </div>
       <div className="w-full max-w-sm">
         <LoginForm onLogin={handleLogin} />
@@ -147,8 +197,8 @@ export default function App() {
   );
 }
 
-function LoginForm({ onLogin }: { onLogin: (role: 'admin' | 'salon', salonId?: string) => void }) {
-  const [email, setEmail] = useState('');
+function LoginForm({ onLogin }: { onLogin: (role: 'admin' | 'salon' | 'client_admin', salonId?: string) => void }) {
+  const [email, setEmail] = useState('admin@central.com');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -156,12 +206,14 @@ function LoginForm({ onLogin }: { onLogin: (role: 'admin' | 'salon', salonId?: s
   function handleSubmit() {
     setError('');
     setLoading(true);
+
     // Admin login
-    if (email === 'admin@central.com' && password === 'admin123') {
+    if (email === 'admin@central.com' && password === 'iolanda2021') {
       onLogin('admin');
       setLoading(false);
       return;
     }
+
     // Salon login
     const salons = db.getSalons();
     const salon = salons.find(s => s.email === email && s.password === password);
@@ -180,13 +232,21 @@ function LoginForm({ onLogin }: { onLogin: (role: 'admin' | 'salon', salonId?: s
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-      <h2 className="text-white font-bold text-center text-lg">Entrar</h2>
+      <div className="text-center space-y-1">
+        <h2 className="text-white font-bold text-base">
+          Acesso Central Admin
+        </h2>
+        <p className="text-[10px] text-neutral-400 leading-relaxed max-w-[250px] mx-auto">
+          Gerencie planos, assinaturas e faturamento de toda a plataforma.
+        </p>
+      </div>
+
       <div>
         <label className="text-xs text-neutral-400 uppercase font-bold block mb-1">E-mail</label>
         <input
           type="email" value={email} onChange={e => setEmail(e.target.value)}
           placeholder="seu@email.com"
-          className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-pink-500 transition"
+          className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-red-500 transition"
         />
       </div>
       <div>
@@ -195,17 +255,23 @@ function LoginForm({ onLogin }: { onLogin: (role: 'admin' | 'salon', salonId?: s
           type="password" value={password} onChange={e => setPassword(e.target.value)}
           placeholder="••••••"
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-pink-500 transition"
+          className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-red-500 transition"
         />
       </div>
       {error && <p className="text-red-400 text-xs text-center">{error}</p>}
       <button
         onClick={handleSubmit} disabled={loading}
-        className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black py-3 rounded-xl text-sm active:scale-95 transition disabled:opacity-50"
+        className="w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-black py-3 rounded-xl text-sm active:scale-95 transition disabled:opacity-50"
       >
         {loading ? 'Entrando...' : 'Entrar'}
       </button>
-      <p className="text-neutral-600 text-[10px] text-center">Admin: admin@central.com / admin123</p>
+
+      <div className="bg-neutral-950/50 rounded-xl p-2.5 text-center border border-neutral-800/50 space-y-1">
+        <span className="text-[9px] text-neutral-500 font-bold block uppercase">Conta de Demonstração</span>
+        <div className="text-[10px] text-neutral-400 font-mono">
+          admin@central.com / admin123
+        </div>
+      </div>
     </div>
   );
 }
